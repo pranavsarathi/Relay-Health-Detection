@@ -1,1 +1,1 @@
-# Relay-Health-Detection
+A real-time relay health monitoring and control system using Xilinx Spartan-6 FPGA and NodeMCU, which measures temperature via LM35 sensor, classifies relay condition (GOOD/WARNING/BAD), and transmits data to the cloud using MQTT , while enabling FPGA-based relay switching through UART communication.
