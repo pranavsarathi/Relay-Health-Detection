@@ -1,0 +1,309 @@
+# 📡 FPGA-Based Smart Relay Health Monitoring System
+
+![FPGA](https://img.shields.io/badge/FPGA-Xilinx%20Spartan--6-red.svg)
+![MCU](https://img.shields.io/badge/MCU-NodeMCU%20ESP8266-blue.svg)
+![Protocol](https://img.shields.io/badge/protocol-MQTT%20%7C%20UART-green.svg)
+![HDL](https://img.shields.io/badge/HDL-Verilog%20RTL-orange.svg)
+![Status](https://img.shields.io/badge/status-Completed-brightgreen.svg)
+
+A real-time relay health monitoring and control system integrating **FPGA**, **embedded systems**, and **cloud communication**. The system continuously monitors temperature, relay operational status, and relay health condition — classifying it as `GOOD`, `WARNING`, or `BAD` — and transmits live data to the cloud over **MQTT**.
+
+---
+
+## 🧠 Overview
+
+Built around the **Xilinx Spartan-6 FPGA** and **NodeMCU (ESP8266)**, this project reads analog temperature data from an **LM35** sensor, classifies the relay health on the NodeMCU, and sends the result to the FPGA over **UART**. The FPGA controls a **2-channel 5V relay module** using clock-synthesized switching logic written in **Verilog (RTL)**. All data is simultaneously published to the cloud via **MQTT** for remote monitoring and diagnostics.
+
+---
+
+## 🎯 Objective
+
+To design a reliable and intelligent monitoring system that:
+
+1. Detects early signs of relay failure
+2. Monitors environmental temperature in real time
+3. Classifies relay health condition — GOOD / WARNING / BAD
+4. Provides live cloud updates via MQTT
+5. Enables FPGA-based deterministic relay control using clock synthesis and push button input
+
+---
+
+## 🏗️ System Architecture
+
+```
+LM35 Sensor
+     │
+     ▼
+NodeMCU ESP8266
+(ADC Reading + Health Classification + MQTT Publish)
+     │
+     ├─── UART (TX → FPGA RX) ──────────────────────────────────►
+     │                                                  Xilinx Spartan-6 FPGA
+     │                                                (Verilog RTL Control Logic)
+     │                                                  Clock Synthesis Module
+     │                                                  Push Button Override
+     │                                                         │
+     │                                                  BC546 Transistor (220Ω base)
+     │                                                         │
+     │                                                  Optocoupler (Isolation)
+     │                                                         │
+     │                                              2-Channel 5V Relay Module
+     │                                                         │
+     │                                                  12V DC Load
+     │
+     └─── MQTT ─────────────────────────────────────────────►
+                                                       Cloud Broker
+                                               (Remote Monitoring / Dashboard)
+```
+
+---
+
+## ⚙️ Working Principle
+
+### 1. Temperature Monitoring
+- The **LM35** outputs analog voltage proportional to temperature (10 mV/°C)
+- The **NodeMCU ADC** samples this and converts it to a temperature reading in °C
+
+### 2. Health Classification
+
+| Status | Condition | Indicator |
+|--------|-----------|-----------|
+| `GOOD` | Normal operating range | ✅ |
+| `WARNING` | Approaching threshold limit | ⚠️ |
+| `BAD` | Critical / out-of-range condition | ❌ |
+
+### 3. Communication Flow
+
+```
+NodeMCU reads LM35 analog value
+        │
+        ├── Classifies health: GOOD / WARNING / BAD
+        │
+        ├── Sends status byte to FPGA via UART
+        │       └── NodeMCU TX  →  FPGA RX
+        │
+        └── Publishes JSON payload to MQTT broker
+```
+
+### 4. FPGA Relay Control (Verilog RTL)
+- Relay switching is driven by the **FPGA's internal clock** via clock synthesis
+- A **push button** on the FPGA board allows manual relay toggle
+- UART-received status from NodeMCU can also trigger relay state changes
+- All logic implemented in **Verilog at the RTL level**
+
+### 5. Relay Driver Circuit
+- **BC546 NPN transistor** amplifies the FPGA GPIO signal to drive the relay coil
+- **220Ω resistor** limits base current into the transistor
+- **Optocoupler** (built into the relay module) provides galvanic isolation, protecting the FPGA from back-EMF and voltage spikes
+
+---
+
+## 🔌 Hardware Components
+
+| Component | Quantity | Description |
+|-----------|----------|-------------|
+| Xilinx Spartan-6 FPGA | 1 | Core digital control unit |
+| LM35 Temperature Sensor | 1 | Analog temperature sensing (10 mV/°C) |
+| NodeMCU (ESP8266) | 1 | ADC reading + UART + Wi-Fi / MQTT |
+| 2-Channel 5V Relay Module (with Optocoupler) | 1 | Load switching with built-in isolation |
+| BC546 NPN Transistor | 1 | Signal amplification for relay coil drive |
+| 220Ω Resistor | 1 | Base current limiting for BC546 |
+| Breadboard | 1 | Prototyping and circuit assembly |
+| Jumper Wires | — | Interconnections |
+| 3.91V Rechargeable Battery | 1 | Power supply for NodeMCU |
+| 12V DC Supply | 1 | Relay coil and load operation |
+| FPGA Power Supply | 1 | Dedicated power for Spartan-6 board |
+
+---
+
+## 🔋 Power Supply Map
+
+| Rail | Source | Powers |
+|------|--------|--------|
+| 3.3V / 5V | 3.91V rechargeable battery | NodeMCU (ESP8266) |
+| 12V DC | External DC adapter | Relay module coil |
+| FPGA rail | Dedicated FPGA power supply | Xilinx Spartan-6 board |
+
+---
+
+## 📡 Communication Protocols
+
+| Protocol | Direction | Purpose |
+|----------|-----------|---------|
+| UART | NodeMCU TX → FPGA RX | Real-time health status transfer |
+| MQTT | NodeMCU → Cloud Broker | Remote telemetry and diagnostics |
+
+> **UART note:** NodeMCU `TX` is connected to the FPGA's `RX` pin. Ensure 3.3V logic level compatibility.
+
+---
+
+## 🌐 Cloud Integration (MQTT)
+
+- **Protocol:** MQTT
+- **Broker:** Configurable — Mosquitto / HiveMQ / AWS IoT Core
+- **Suggested topic structure:**
+
+```
+relay/monitor/temperature
+relay/monitor/status
+relay/monitor/relay_state
+```
+
+- **Payload format (JSON):**
+
+```json
+{
+  "temperature_c": 43.2,
+  "relay_status": "ON",
+  "health": "WARNING",
+  "timestamp": 1713820800
+}
+```
+
+**Enables:**
+- Real-time temperature and relay status monitoring
+- Remote diagnostics without physical access
+- Scalable to multi-sensor / multi-relay systems
+- Compatible with Node-RED, Grafana, or custom dashboards
+
+---
+
+## 🧩 FPGA Verilog Modules
+
+| Module | Description |
+|--------|-------------|
+| `top.v` | Top-level integration of all submodules |
+| `clk_divider.v` | Clock synthesis — divides system clock for relay timing |
+| `relay_ctrl.v` | Relay state machine — handles UART input and push button |
+| `uart_rx.v` | UART receiver — reads status byte from NodeMCU |
+
+**Relay switching is triggered by:**
+1. Internal clock logic (automatic timed switching via clock synthesis)
+2. Push button on FPGA board (manual override)
+3. UART command byte received from NodeMCU
+
+---
+
+## 🛡️ Relay Driver & Protection Circuit
+
+```
+FPGA GPIO Pin
+      │
+    [220Ω] ── Base
+                │
+           BC546 NPN Transistor
+                │ Collector
+                │
+          Optocoupler Input LED
+          (inside relay module)
+                │
+          Optocoupler Output
+                │
+          Relay Coil (12V)
+                │
+          Switched Load
+```
+
+> A **flyback diode** across the relay coil terminals is recommended for additional spike suppression.
+
+---
+
+## 💡 Key Features
+
+- 🔄 Real-time relay health monitoring (GOOD / WARNING / BAD)
+- 🌡️ Continuous temperature sensing via LM35
+- 📶 Cloud-connected IoT architecture over MQTT
+- ⚡ FPGA-based deterministic relay control (clock synthesis + push button)
+- 🔗 UART bridge between NodeMCU and FPGA
+- 🧠 Intelligent health classification in embedded firmware
+- 🔌 Hardware-software co-design (Verilog RTL + Embedded C)
+- 🛡️ Optocoupler-based galvanic isolation for FPGA protection
+
+---
+
+## 🧪 Technologies Used
+
+| Technology | Role |
+|-----------|------|
+| Verilog (RTL) | FPGA hardware description and relay control logic |
+| Xilinx Spartan-6 | FPGA target platform |
+| Xilinx ISE / Vivado | Synthesis, implementation, and programming |
+| Embedded C (Arduino framework) | NodeMCU firmware |
+| MQTT Protocol | Cloud telemetry |
+| UART Protocol | FPGA ↔ NodeMCU communication |
+| LM35 | Analog temperature transducer |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Xilinx ISE or Vivado
+- Arduino IDE with ESP8266 board package
+- MQTT broker (Mosquitto / HiveMQ / AWS IoT Core)
+- JTAG programmer for Spartan-6
+
+### FPGA Setup
+```
+1. Open project: fpga/relay_monitor.xise in Xilinx ISE
+2. Run: Synthesize → Implement Design → Generate Programming File
+3. Connect JTAG programmer to Spartan-6 board
+4. Program via iMPACT or Vivado Hardware Manager
+```
+
+### NodeMCU Firmware
+```
+1. Install ESP8266 board package in Arduino IDE
+2. Open: firmware/nodemcu_main.ino
+3. Edit config.h — set Wi-Fi SSID, password, MQTT broker IP
+4. Set baud rate to match FPGA UART receiver (e.g. 9600)
+5. Upload to NodeMCU
+```
+
+---
+
+## 📁 Project Structure
+
+```
+fpga-relay-health-monitor/
+├── fpga/
+│   ├── top.v
+│   ├── clk_divider.v
+│   ├── relay_ctrl.v
+│   └── uart_rx.v
+├── firmware/
+│   ├── nodemcu_main.ino
+│   └── config.h
+├── schematics/
+│   └── circuit_diagram.pdf
+├── docs/
+│   └── system_overview.md
+└── README.md
+```
+
+---
+
+## 🏠 Applications
+
+- Home inverter relay monitoring and protection
+- Industrial automation and control systems
+- Power system protection and fault detection
+- Predictive maintenance platforms
+- IoT-based hardware diagnostics and remote monitoring
+
+---
+
+## 📊 Future Improvements
+
+- [ ] Add **ACS712 current sensor** for enhanced relay diagnostics
+- [ ] Implement **AI/ML-based failure prediction** on cloud-logged data
+- [ ] Develop a **mobile dashboard UI** (Flutter / React Native)
+- [ ] Scale to **multi-relay architecture** using FPGA I/O expansion
+- [ ] Add **data logging and analytics** with InfluxDB + Grafana
+- [ ] Support **TLS-encrypted MQTT** (port 8883)
+- [ ] Enable **OTA firmware updates** for NodeMCU
+- [ ] Add **LCD/OLED display** on FPGA board for local status readout
+
+---
+
+*Built with hardware-software co-design principles — Verilog RTL + Embedded C + IoT cloud integration.*
