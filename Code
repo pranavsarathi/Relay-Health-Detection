@@ -1,0 +1,114 @@
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+#include <SoftwareSerial.h>
+
+// FPGA UART
+SoftwareSerial fpgaSerial(D5, D6);   // RX, TX
+
+// WiFi
+const char* ssid = "MadhuPrabhu";
+const char* password = "sos10110";
+
+// MQTT
+const char* mqtt_server = "broker.emqx.io";
+const int mqtt_port = 1883;
+const char* client_id = "madhupranavkitcoimbatore";
+
+// Topics
+const char* topic_temp   = "pranav/madhu/kit/temp";
+const char* topic_relay  = "pranav/madhu/kit/relay";
+const char* topic_health = "pranav/madhu/kit/health";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+String relayStatus = "OFF";
+String healthStatus = "GOOD";
+
+void setup_wifi() {
+  Serial.println("Connecting WiFi...");
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nWiFi Connected");
+  Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.println("Connecting MQTT...");
+    if (client.connect(client_id)) {
+      Serial.println("MQTT Connected");
+    } else {
+      Serial.println("Retrying...");
+      delay(2000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);        // debug monitor
+  fpgaSerial.begin(115200);    // FPGA UART
+
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+}
+
+void loop() {
+  if (!client.connected())
+    reconnect();
+
+  client.loop();
+
+  // Temperature from LM35
+  int adc = analogRead(A0);
+  float voltage = adc * (3.3 / 1023.0);
+  float temperature = voltage * 100.0;
+
+  // FPGA UART receive
+  if (fpgaSerial.available()) {
+    char data = fpgaSerial.read();
+
+    Serial.print("FPGA RX: ");
+    Serial.println(data);
+
+    static int clickCount = 0;
+
+if (data == '1') {
+    relayStatus = "ON";
+    clickCount++;
+}
+else if (data == '0') {
+    relayStatus = "OFF";
+}
+
+if (clickCount < 20)
+    healthStatus = "GOOD";
+else if (clickCount <= 30)
+    healthStatus = "WARNING";
+else
+    healthStatus = "BAD";
+  } 
+
+  // Publish
+  String tempStr = String(temperature, 2);
+
+  client.publish(topic_temp, tempStr.c_str());
+  client.publish(topic_relay, relayStatus.c_str());
+  client.publish(topic_health, healthStatus.c_str());
+
+  Serial.println("----- DATA -----");
+  Serial.print("Temp: ");
+  Serial.println(tempStr);
+  Serial.print("Relay: ");
+  Serial.println(relayStatus);
+  Serial.print("Health: ");
+  Serial.println(healthStatus);
+  Serial.println("----------------");
+
+  delay(1000);
+}
